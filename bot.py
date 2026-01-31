@@ -1,41 +1,40 @@
-import requests
-import time
-import os
-from flask import Flask
-from threading import Thread
+import discord
+from discord.ext import commands
+import aiohttp
+import asyncio
 
-app = Flask('')
+TOKEN = "MTQ2MzUwMTA4MzM1OTA1MTkxMg.Gs3rVN.u_QxE4-2blggtCUWpOSQV_9Ab-aGn-FpNiYmVE"
+# Thay link Space của bạn vào đây (nhớ thêm /deploy ở cuối)
+HF_URL = "https://corrymusion-asdad.hf.space/deploy"
 
-@app.route('/')
-def home():
-    return "Hệ thống điều khiển IDX đang chạy với HF Token!", 200
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
-def run_web():
-    app.run(host='0.0.0.0', port=10000)
+async def wake_up_and_deploy(url):
+    # Render sẽ thử đánh thức Space trước để né 503
+    async with aiohttp.ClientSession() as session:
+        base_url = url.replace('/deploy', '')
+        for i in range(3): # Thử lại 3 lần
+            async with session.get(base_url) as check:
+                if check.status == 200:
+                    # Nếu Space đã tỉnh, gửi lệnh xử lý file
+                    async with session.post(url) as resp:
+                        return await resp.json()
+            print(f"Space đang ngủ, đợi 20s... (Lần {i+1})")
+            await asyncio.sleep(20)
+    return {"status": "error", "message": "Space không phản hồi (503)"}
 
-def keep_alive():
-    # 1. Thông tin cấu hình
-    HF_TOKEN = os.environ.get('HF_TOKEN') # Lấy từ Environment Variables trên Render
-    HF_SPACE_URL = "https://corrymesionvn-boop.hf.space" 
+@bot.command()
+async def start_vps(ctx):
+    await ctx.send("📡 Đang đánh thức Hugging Face Worker...")
+    result = await wake_up_and_deploy(HF_URL)
     
-    # 2. Thiết lập Header với Token để Hugging Face nhận diện "chủ nhân"
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-    
-    print("🚀 Bắt đầu chu kỳ giữ luồng kèm Token...")
-    while True:
-        try:
-            # Ping kèm Token để đảm bảo Space luôn thức
-            response = requests.get(HF_SPACE_URL, headers=headers, timeout=15)
-            if response.status_code == 200:
-                print("✅ Xác thực thành công: Discord Bot đang Online.")
-            else:
-                print(f"⚠️ Cảnh báo: Space phản hồi mã {response.status_code}")
-        except Exception as e:
-            print(f"❌ Lỗi kết nối: {e}")
-        
-        # Ping mỗi 10 phút
-        time.sleep(600) 
+    if result.get("status") == "success":
+        await ctx.send(f"✅ {result['message']}")
+    else:
+        await ctx.send(f"❌ Lỗi: {result['message']}")
 
-if __name__ == "__main__":
-    Thread(target=run_web).start()
-    keep_alive()
+@bot.event
+async def on_ready():
+    print(f"Bot đầu não đã online: {bot.user}")
+
+bot.run(TOKEN)
