@@ -3,44 +3,68 @@ from discord.ext import commands
 import aiohttp
 import asyncio
 import os
+from flask import Flask
+from threading import Thread
 
-# Lấy Token từ Environment Variables của Render
+# --- 1. WEB SERVER GIẢ LẬP ĐỂ FIX LỖI PORT TRÊN RENDER ---
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def health_check():
+    return "Bot is alive!", 200
+
+def run_web():
+    # Render thường dùng cổng 10000 mặc định cho Web Service
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host='0.0.0.0', port=port)
+
+# --- 2. CẤU HÌNH BOT DISCORD ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
-# Thay link này bằng link Space của bạn (nhìn trong hình image_e6453a.png của bạn)
-HF_URL = "https://corrymusion-asdadasdasdasd.hf.space/deploy"
+HF_TOKEN = os.environ.get('HF_TOKEN') 
+HF_URL = "https://corrymusion-asgadfgsbsdbf.hf.space/deploy"
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
-async def wake_up_worker(url):
-    """Hàm đánh thức Space và gửi lệnh POST"""
+async def wake_up_private_worker(url):
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     async with aiohttp.ClientSession() as session:
-        # 1. Gửi lệnh GET để đánh thức Space (né lỗi 503)
         base_url = url.replace('/deploy', '')
         for i in range(3):
             try:
-                async with session.get(base_url, timeout=10) as check:
+                # Gửi kèm Token để vào Space Private
+                async with session.get(base_url, headers=headers, timeout=15) as check:
                     if check.status == 200:
-                        # 2. Nếu Space đã online, gửi lệnh POST giải nén
-                        async with session.post(url, timeout=300) as resp:
+                        async with session.post(url, headers=headers, timeout=300) as resp:
                             return await resp.json()
-            except:
+                    elif check.status == 401:
+                        return {"status": "error", "message": "Sai HF_TOKEN hoặc không có quyền Read."}
+            except Exception:
                 pass
-            print(f"Đang đợi Space khởi động... thử lại lần {i+1}")
-            await asyncio.sleep(25) # Đợi Space boot up
+            await asyncio.sleep(25) 
     return {"status": "error", "message": "Space không phản hồi sau 1 phút."}
 
 @bot.command()
 async def deploy(ctx):
-    await ctx.send("📡 Đang kết nối với Hugging Face Worker (vui lòng đợi)...")
-    result = await wake_up_worker(HF_URL)
-    
+    await ctx.send("📡 Đang xác thực và gọi Space Private...")
+    result = await wake_up_private_worker(HF_URL)
     if result.get("status") == "success":
-        await ctx.send(f"✅ Thành công: {result['message']}")
+        await ctx.send(f"✅ {result['message']}")
     else:
-        await ctx.send(f"❌ Lỗi: {result['message']}")
+        await ctx.send(f"❌ {result['message']}")
 
 @bot.event
 async def on_ready():
-    print(f"🚀 Bot điều khiển đã online: {bot.user}")
+    print(f"🚀 Bot Render đã online: {bot.user}")
 
-bot.run(TOKEN)
+# --- 3. CHẠY SONG SONG ---
+if __name__ == "__main__":
+    # Chạy Web Server ở luồng riêng để Render không báo lỗi Port
+    t = Thread(target=run_web)
+    t.daemon = True
+    t.start()
+    
+    # Chạy Bot Discord
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"Lỗi khởi động Bot: {e}")
