@@ -4,50 +4,44 @@ const express = require('express');
 
 const app = express();
 const port = process.env.PORT || 3000;
-
-// Giữ cho Render luôn xanh
-app.get('/', (req, res) => res.send('Bot đang chạy!'));
-app.listen(port, '0.0.0.0', () => console.log(`Cổng: ${port}`));
+app.get('/', (req, res) => res.send('Bot IDX Live!'));
+app.listen(port, '0.0.0.0', () => console.log(`Listening on ${port}`));
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-// Lấy biến từ Environment trên Render
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const HF_TOKEN = process.env.HF_TOKEN;
-// FIX 404: Đảm bảo có đuôi /trigger ở cuối URL
 const HF_TRIGGER_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || message.content !== '!keep') return;
 
-    const reply = await message.reply("⏳ Đang gửi yêu cầu kích hoạt...");
+    const reply = await message.reply("⏳ Đang gửi yêu cầu treo máy...");
 
     try {
-        const response = await axios.post(HF_TRIGGER_URL, {}, {
-            headers: { 
-                'Authorization': `Bearer ${HF_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 25000 
+        // Gửi lệnh và chỉ cần quan tâm xem HF có nhận được không (status 200)
+        const response = await axios({
+            method: 'get',
+            url: HF_TRIGGER_URL,
+            headers: { 'Authorization': `Bearer ${HF_TOKEN}` },
+            timeout: 15000
         });
 
         if (response.status === 200) {
-            await reply.edit("🚀 **Thành công!** Worker đã nhận lệnh và đang treo IDX cho bạn.");
+            await reply.edit("🚀 **Xác nhận:** Hugging Face đã nhận lệnh thành công! Worker đang treo máy trong 8 phút.");
         }
     } catch (error) {
-        let msg = "Lỗi kết nối.";
-        if (error.response) {
-            // Nếu vẫn báo 404 ở đây, nghĩa là link HF_TRIGGER_URL bị sai tên Space
-            msg = `Mã lỗi ${error.response.status}: Kiểm tra lại URL trong index.js!`;
+        // Nếu log HF của bạn đã hiện 200 mà bot vẫn báo lỗi, ta sẽ kiểm tra kỹ lỗi đó ở đây
+        console.error("Lỗi:", error.message);
+        
+        if (error.response && error.response.status === 200) {
+            await reply.edit("✅ **Thành công:** Mặc dù có lỗi hiển thị nhưng Hugging Face đã phản hồi mã 200.");
+        } else {
+            await reply.edit(`❌ **Lỗi:** ${error.message}. (Hãy kiểm tra tab Logs của Hugging Face để chắc chắn)`);
         }
-        await reply.edit(`❌ **Thất bại:** ${msg}`);
     }
 });
 
-client.login(DISCORD_TOKEN).catch(err => console.error("Lỗi Token Discord:", err.message));
+client.login(DISCORD_TOKEN);
