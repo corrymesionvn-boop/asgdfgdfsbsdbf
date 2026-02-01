@@ -2,11 +2,17 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 const express = require('express');
 
-// Tạo web server để Render không cho bot "đi ngủ"
+// --- CẤU HÌNH SERVER ĐỂ RENDER KHÔNG STOP BOT ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot Discord is Online!'));
-app.listen(process.env.PORT || 3000);
+const port = process.env.PORT || 3000;
 
+app.get('/', (req, res) => res.send('Bot Discord đang hoạt động!'));
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server đang lắng nghe tại port ${port}`);
+});
+
+// --- CẤU HÌNH DISCORD BOT ---
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -15,25 +21,54 @@ const client = new Client({
     ]
 });
 
-// THÔNG TIN BẢO MẬT CỦA BẠN
+// Thông tin bạn đã cung cấp
 const HF_TOKEN = "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"; 
 const HF_TRIGGER_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 const DISCORD_TOKEN = "MTQ2MzUwMTA4MzM1OTA1MTkxMg.GIsRxT.K2PkAE5MA4Snn5ZWVy3vCxsEU6OQ582hxc6w88";
 
+client.on('ready', () => {
+    console.log(`Đã đăng nhập thành công dưới tên: ${client.user.tag}`);
+});
+
 client.on('messageCreate', async (message) => {
+    // Không trả lời tin nhắn của bot khác
     if (message.author.bot) return;
 
+    // Lệnh kích hoạt
     if (message.content === '!keep') {
-        const reply = await message.reply("⏳ Đang xác thực với Private Space...");
+        const reply = await message.reply("⏳ Đang gửi yêu cầu xác thực tới Private Space trên Hugging Face...");
 
         try {
-            // Gửi request POST kèm theo Bearer Token để vượt qua bảo mật Private
-            await axios.post(HF_TRIGGER_URL, {}, {
+            // Gửi request POST kèm theo Bearer Token để vượt qua lớp bảo mật Private
+            const response = await axios.post(HF_TRIGGER_URL, {}, {
                 headers: {
-                    'Authorization': `Bearer ${HF_TOKEN}`
+                    'Authorization': `Bearer ${HF_TOKEN}`,
+                    'Content-Type': 'application/json'
                 }
             });
-            await reply.edit("🚀 **Thành công!** Worker đã nhận lệnh và đang treo Workspace của bạn (vps123-35343544) trong 8 phút.");
+
+            if (response.status === 200 || response.status === 202) {
+                await reply.edit("🚀 **Thành công!** Hugging Face đã nhận lệnh và đang treo Workspace IDX của bạn trong 8 phút.");
+            }
+        } catch (error) {
+            console.error("Lỗi kết nối HF:", error.message);
+            
+            let errorMsg = "❌ **Lỗi:** Không thể kết nối tới Hugging Face.";
+            if (error.response && error.response.status === 401) {
+                errorMsg = "❌ **Lỗi 401:** Token Hugging Face không hợp lệ hoặc Space không cho phép truy cập.";
+            } else if (error.response && error.response.status === 404) {
+                errorMsg = "❌ **Lỗi 404:** Không tìm thấy URL `/trigger`. Hãy kiểm tra lại code Flask trên HF.";
+            }
+
+            await reply.edit(errorMsg);
+        }
+    }
+});
+
+// Đăng nhập bot
+client.login(DISCORD_TOKEN).catch(err => {
+    console.error("Discord Login Error:", err.message);
+});
         } catch (error) {
             console.error("Lỗi kết nối:");
             if (error.response && error.response.status === 401) {
