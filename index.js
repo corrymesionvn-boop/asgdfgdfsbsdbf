@@ -5,9 +5,8 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Giữ Render luôn chạy
-app.get('/', (req, res) => res.send('Bot Discord IDX đang Live!'));
-app.listen(port, '0.0.0.0', () => console.log(`Server listening on port ${port}`));
+app.get('/', (req, res) => res.send('Bot Discord đang chạy!'));
+app.listen(port, '0.0.0.0', () => console.log(`Server live on port ${port}`));
 
 const client = new Client({
     intents: [
@@ -17,23 +16,38 @@ const client = new Client({
     ]
 });
 
-// Lấy biến từ mục Environment trên Render
+// Lấy thông tin từ mục Environment Variables trên Render
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const HF_TOKEN = process.env.HF_TOKEN;
 const HF_TRIGGER_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
+    if (message.author.bot || message.content !== '!keep') return;
 
-    if (message.content === '!keep') {
-        const reply = await message.reply("⏳ Đang gửi tín hiệu kích hoạt tới Hugging Face...");
+    const reply = await message.reply("⏳ Đang gửi yêu cầu tới Hugging Face...");
 
-        try {
-            // Gửi request POST kèm Token xác thực cho Space Private
-            const response = await axios.post(HF_TRIGGER_URL, {}, {
-                headers: { 
-                    'Authorization': `Bearer ${HF_TOKEN}`,
-                    'Content-Type': 'application/json'
+    try {
+        const response = await axios.post(HF_TRIGGER_URL, {}, {
+            headers: { 
+                'Authorization': `Bearer ${HF_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 20000 
+        });
+
+        if (response.status === 200) {
+            await reply.edit("🚀 **Thành công!** Worker đã nhận lệnh và đang treo IDX cho bạn.");
+        }
+    } catch (error) {
+        let errorDetail = "Lỗi kết nối.";
+        if (error.response) {
+            errorDetail = `Mã lỗi ${error.response.status}: Vui lòng kiểm tra lại URL hoặc Token!`;
+        }
+        await reply.edit(`❌ **Thất bại:** ${errorDetail}`);
+    }
+});
+
+client.login(DISCORD_TOKEN);
                 },
                 timeout: 15000 // Chờ 15 giây
             });
