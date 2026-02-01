@@ -4,62 +4,61 @@ const axios = require('axios');
 const app = express();
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-// Endpoint trigger của Hugging Face
 const HF_TRIGGER_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
-// --- WEB INTERFACE (Để Render không bị ngủ & Nút bấm Web) ---
+// --- TẠO GIAO DIỆN WEB CHO RENDER ---
 app.get('/', (req, res) => {
     res.send(`
-        <body style="background:#0d1117; color:white; text-align:center; font-family:sans-serif; padding-top:80px;">
-            <h1 style="color:#5865F2;">🤖 IDX Bot Controller</h1>
-            <p>Bot đang chạy trên Render (24/7)</p>
-            <hr style="width:50%; border:0.5px solid #30363d; margin:30px auto;">
+        <body style="background:#0d1117; color:white; text-align:center; font-family:sans-serif; padding-top:50px;">
+            <h1 style="color:#5865F2;">🤖 IDX Control Hub</h1>
+            <p>Trạng thái: Đang treo bot 24/7 trên Render</p>
             <form action="/web-trigger" method="get">
-                <button style="background:#238636; color:white; border:none; padding:18px 35px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px;">
-                    🚀 KÍCH HOẠT IDX (HUGGING FACE)
+                <button style="background:#238636; color:white; border:none; padding:15px 30px; border-radius:8px; cursor:pointer; font-weight:bold;">
+                    🚀 BẤM ĐỂ KHỞI ĐỘNG IDX (WEB)
                 </button>
             </form>
         </body>
     `);
 });
 
+// Khi nhấn nút trên Web Render
 app.get('/web-trigger', async (req, res) => {
     try {
-        await axios.get(`${HF_TRIGGER_URL}?user=Admin_Web_Render`);
-        res.send("<div style='text-align:center; padding-top:50px;'><h1>✅ Đã gọi Hugging Face!</h1><p>Hệ thống sẽ chạy trong 8 phút. Xem log tại HF.</p><a href='/'>Quay lại</a></div>");
-    } catch (e) {
-        res.status(500).send("<h1>❌ Lỗi: HF không phản hồi</h1><a href='/'>Quay lại</a>");
-    }
+        await axios.get(`${HF_TRIGGER_URL}?user=Admin_Web`);
+        res.send("<h1>✅ Đã gọi Hugging Face!</h1><a href='/'>Quay lại</a>");
+    } catch (e) { res.status(500).send("❌ Lỗi gọi HF"); }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('🌐 Web Monitor is active'));
+app.listen(process.env.PORT || 3000);
 
-// --- DISCORD BOT LOGIC ---
+// --- CẤU HÌNH NÚT BẤM DISCORD ---
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 client.on('messageCreate', async (message) => {
+    // Khi gõ lệnh !idx, bot sẽ hiện nút
     if (message.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId('btn_idx_refresh')
+                .setCustomId('btn_refresh')
                 .setLabel('🚀 Khởi động / Làm mới IDX')
                 .setStyle(ButtonStyle.Primary),
         );
-        await message.reply({ content: 'Nhấn nút để Hugging Face treo IDX trong 8 phút:', components: [row] });
+        await message.reply({ content: 'Nhấn nút để kích hoạt Hugging Face (Treo 8 phút):', components: [row] });
     }
 });
 
+// Xử lý khi có người nhấn nút trên Discord
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
-    if (interaction.customId === 'btn_idx_refresh') {
+    if (interaction.customId === 'btn_refresh') {
         const userName = interaction.user.username;
         await interaction.reply(`⏳ Đang báo cho Hugging Face kích hoạt cho **${userName}**...`);
         try {
-            // Gọi sang endpoint /trigger
+            // Gửi lệnh sang cổng /trigger đã mở trên Hugging Face
             await axios.get(`${HF_TRIGGER_URL}?user=${userName}`);
-            await interaction.editReply(`✅ **${userName}** đã kích hoạt thành công! HF đang treo IDX (8 phút). Trình duyệt sẽ tự tắt sau đó.`);
+            await interaction.editReply(`✅ **${userName}** đã kích hoạt thành công! HF đang vào IDX và sẽ tự thoát sau 8 phút.`);
         } catch (e) {
-            await interaction.editReply("❌ Lỗi: Không thể kết nối tới Hugging Face Space.");
+            await interaction.editReply("❌ Lỗi: Hugging Face không phản hồi (404 hoặc Down).");
         }
     }
 });
