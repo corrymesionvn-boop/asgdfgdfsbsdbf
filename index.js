@@ -1,23 +1,45 @@
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const express = require('express');
 const axios = require('axios');
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
+const app = express();
 
-const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger"; // Link HF của bạn
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
+// --- TẠO WEB ĐỂ TREO BOT 24/7 ---
+app.get('/', (req, res) => {
+    res.send('<h1 style="text-align:center;">🤖 Bot đang online! Dán link này vào UptimeRobot để treo 24/7.</h1>');
+});
+app.listen(process.env.PORT || 3000);
 
-    // Báo cho Discord là "đã nhận lệnh", giúp nút bấm không bị báo lỗi đỏ
-    await interaction.reply({ content: '⏳ Đang gửi tín hiệu tới Hugging Face...', ephemeral: true });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-    try {
-        // GIẢ LẬP TRUY CẬP WEB: Gửi lệnh Ping tới HF
-        await axios.get(HF_URL); 
-        
-        await interaction.editReply('✅ **Thành công!** Hugging Face đã nhận được lệnh và đang treo IDX.');
-    } catch (error) {
-        await interaction.editReply('❌ **Lỗi:** Không thể "nhấn chuông" Hugging Face. Hãy kiểm tra xem Space HF có bị tắt không.');
+client.on('messageCreate', async (msg) => {
+    if (msg.content === '!idx') {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('btn_run').setLabel('🚀 Kích hoạt / Treo lại IDX').setStyle(ButtonStyle.Primary),
+        );
+        await msg.reply({ content: 'Hệ thống treo IDX (8 phút). Nhấn nút bên dưới:', components: [row] });
     }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+client.on('interactionCreate', async (i) => {
+    if (!i.isButton()) return;
+
+    // Báo Discord đợi phản hồi từ HF
+    await i.deferReply({ ephemeral: true });
+
+    try {
+        // Gửi lệnh "nhấn chuông" sang HF
+        const response = await axios.get(`${HF_URL}?user=${i.user.username}`, { timeout: 15000 });
+        
+        if (response.status === 200) {
+            await i.editReply(`✅ **Thành công!** Hugging Face đã nhận lệnh từ **${i.user.username}**.`);
+        }
+    } catch (e) {
+        console.error(e.message);
+        await i.editReply(`❌ **Lỗi:** Không thể gọi Hugging Face. Hãy kiểm tra tab Logs bên HF.`);
+    }
+});
+
+client.login(DISCORD_TOKEN);
