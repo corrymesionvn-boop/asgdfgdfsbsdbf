@@ -1,40 +1,65 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const axios = require('axios');
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
-
+const axios = require('axios');
 const app = express();
-const port = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Bot IDX Live!'));
-app.listen(port, '0.0.0.0');
-
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-});
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const HF_TOKEN = process.env.HF_TOKEN;
-// Đảm bảo URL này giống hệt link bạn dùng trên trình duyệt
+// Endpoint trigger của Hugging Face
 const HF_TRIGGER_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot || message.content !== '!keep') return;
+// --- WEB INTERFACE (Để Render không bị ngủ & Nút bấm Web) ---
+app.get('/', (req, res) => {
+    res.send(`
+        <body style="background:#0d1117; color:white; text-align:center; font-family:sans-serif; padding-top:80px;">
+            <h1 style="color:#5865F2;">🤖 IDX Bot Controller</h1>
+            <p>Bot đang chạy trên Render (24/7)</p>
+            <hr style="width:50%; border:0.5px solid #30363d; margin:30px auto;">
+            <form action="/web-trigger" method="get">
+                <button style="background:#238636; color:white; border:none; padding:18px 35px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px;">
+                    🚀 KÍCH HOẠT IDX (HUGGING FACE)
+                </button>
+            </form>
+        </body>
+    `);
+});
 
-    const reply = await message.reply("⏳ Đang gửi yêu cầu treo máy...");
-
+app.get('/web-trigger', async (req, res) => {
     try {
-        await axios.get(HF_TRIGGER_URL, {
-            headers: { 'Authorization': `Bearer ${HF_TOKEN}` },
-            timeout: 10000 
-        });
-        
-        // Nếu dòng trên không bị crash, mặc định là thành công
-        await reply.edit("🚀 **Thành công!** Worker đã nhận lệnh (Kiểm tra log HF để chắc chắn).");
-    } catch (error) {
-        // Fix lỗi báo 404 sai: Nếu log HF đã hiện 200, ta coi như thành công
-        if (error.response && error.response.status === 404) {
-            await reply.edit("🚀 **Thành công!** (Lệnh đã gửi, mặc dù HF trả về phản hồi lạ).");
-        } else {
-            await reply.edit(`❌ **Lỗi:** ${error.message}`);
+        await axios.get(`${HF_TRIGGER_URL}?user=Admin_Web_Render`);
+        res.send("<div style='text-align:center; padding-top:50px;'><h1>✅ Đã gọi Hugging Face!</h1><p>Hệ thống sẽ chạy trong 8 phút. Xem log tại HF.</p><a href='/'>Quay lại</a></div>");
+    } catch (e) {
+        res.status(500).send("<h1>❌ Lỗi: HF không phản hồi</h1><a href='/'>Quay lại</a>");
+    }
+});
+
+app.listen(process.env.PORT || 3000, () => console.log('🌐 Web Monitor is active'));
+
+// --- DISCORD BOT LOGIC ---
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+
+client.on('messageCreate', async (message) => {
+    if (message.content === '!idx') {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('btn_idx_refresh')
+                .setLabel('🚀 Khởi động / Làm mới IDX')
+                .setStyle(ButtonStyle.Primary),
+        );
+        await message.reply({ content: 'Nhấn nút để Hugging Face treo IDX trong 8 phút:', components: [row] });
+    }
+});
+
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+    if (interaction.customId === 'btn_idx_refresh') {
+        const userName = interaction.user.username;
+        await interaction.reply(`⏳ Đang báo cho Hugging Face kích hoạt cho **${userName}**...`);
+        try {
+            // Gọi sang endpoint /trigger
+            await axios.get(`${HF_TRIGGER_URL}?user=${userName}`);
+            await interaction.editReply(`✅ **${userName}** đã kích hoạt thành công! HF đang treo IDX (8 phút). Trình duyệt sẽ tự tắt sau đó.`);
+        } catch (e) {
+            await interaction.editReply("❌ Lỗi: Không thể kết nối tới Hugging Face Space.");
         }
     }
 });
