@@ -2,12 +2,14 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 const express = require('express');
 
+// Khởi tạo Express để Render không báo lỗi Port
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('Bot Discord đang chạy!'));
-app.listen(port, '0.0.0.0', () => console.log(`Server live on port ${port}`));
+app.get('/', (req, res) => res.send('Bot Discord đang hoạt động 24/7!'));
+app.listen(port, '0.0.0.0', () => console.log(`Server đang lắng nghe tại cổng ${port}`));
 
+// Cấu hình Bot Discord
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -16,24 +18,51 @@ const client = new Client({
     ]
 });
 
-// Lấy thông tin từ mục Environment Variables trên Render
+// Các biến môi trường lấy từ mục Environment của Render
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const HF_TOKEN = process.env.HF_TOKEN;
 const HF_TRIGGER_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
 client.on('messageCreate', async (message) => {
+    // Chỉ phản hồi khi nhận lệnh !keep và không phải tin nhắn từ bot
     if (message.author.bot || message.content !== '!keep') return;
 
-    const reply = await message.reply("⏳ Đang gửi yêu cầu tới Hugging Face...");
+    const reply = await message.reply("⏳ Đang gửi yêu cầu kích hoạt tới Hugging Face...");
 
     try {
+        // Gửi yêu cầu POST kèm Token xác thực cho Space Private
         const response = await axios.post(HF_TRIGGER_URL, {}, {
             headers: { 
                 'Authorization': `Bearer ${HF_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 20000 
+            timeout: 25000 // Chờ phản hồi trong 25 giây
         });
+
+        // Nếu Hugging Face trả về mã 200 (Thành công)
+        if (response.status === 200) {
+            await reply.edit("🚀 **Thành công!** Worker đã nhận lệnh và đang treo IDX cho bạn trong 8 phút.");
+        }
+    } catch (error) {
+        console.error("Chi tiết lỗi:");
+        let errorDetail = "Lỗi kết nối không xác định.";
+        
+        if (error.response) {
+            // Lỗi từ phía Server Hugging Face (401, 404, 405)
+            errorDetail = `Mã lỗi ${error.response.status}: Vui lòng kiểm tra lại URL hoặc Token trên Render!`;
+        } else if (error.request) {
+            // Không nhận được phản hồi
+            errorDetail = "Không thể kết nối tới Hugging Face (Timeout).";
+        }
+
+        await reply.edit(`❌ **Thất bại:** ${errorDetail}`);
+    }
+});
+
+// Đăng nhập Bot Discord
+client.login(DISCORD_TOKEN).catch(err => {
+    console.error("Lỗi đăng nhập Discord:", err.message);
+});
 
         if (response.status === 200) {
             await reply.edit("🚀 **Thành công!** Worker đã nhận lệnh và đang treo IDX cho bạn.");
