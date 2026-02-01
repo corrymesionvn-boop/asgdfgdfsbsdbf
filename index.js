@@ -7,14 +7,9 @@ app.get('/', (req, res) => res.send('Bot IDX Live!'));
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({ 
-    intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent 
-    ] 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
 });
 
-// Link Space của bạn
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger"; 
 
 client.on('messageCreate', async (message) => {
@@ -22,11 +17,17 @@ client.on('messageCreate', async (message) => {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('trigger_idx')
-                .setLabel('Khởi động/Treo IDX (8 Phút)')
+                .setLabel('Khởi động/Refresh IDX')
                 .setStyle(ButtonStyle.Success)
         );
+
+        // Cập nhật tiêu đề và nội dung mô tả mới của bạn
+        const responseContent = 
+            "**Khởi động/Refresh IDX:**\n" +
+            "Bot sẽ chỉ treo Web trong vòng 8 phút, sau 8 phút Bot sẽ tự rời web, tương tác nút này để Bot khởi động/refresh lại web nhé";
+
         await message.reply({ 
-            content: '💻 **Hệ thống điều khiển treo máy:**', 
+            content: responseContent, 
             components: [row] 
         });
     }
@@ -36,34 +37,31 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
     if (interaction.customId === 'trigger_idx') {
-        // Thông báo tên người kích hoạt
+        // Thông báo công khai tên người kích hoạt
         await interaction.reply({ 
-            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt treo IDX!` 
+            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt một phiên treo máy/refresh 8 phút!` 
         });
 
         try {
             const hfToken = process.env.HF_TOKEN; 
-
             const response = await axios.get(HF_URL, {
                 params: { 
                     token: hfToken, 
                     user: interaction.user.username 
                 },
-                // Gửi chìa khóa để vào Space Private
-                headers: {
-                    'Authorization': `Bearer ${hfToken}`
-                },
+                // Giữ Authorization để vào Space Private
+                headers: { 'Authorization': `Bearer ${hfToken}` },
                 timeout: 10000 
             });
             
+            // Phản hồi riêng xác nhận kết quả từ Hugging Face
             await interaction.followUp({ 
-                content: `✅ **Xác nhận:** ${response.data}`, 
+                content: `✅ **Hệ thống xác nhận:** ${response.data}`, 
                 ephemeral: true 
             });
         } catch (error) {
-            console.error("Lỗi:", error.message);
             await interaction.followUp({ 
-                content: `❌ Lỗi kết nối: Space có thể đang khởi động lại hoặc sai Token!`, 
+                content: `❌ Lỗi: Không thể kết nối tới Space để Refresh!`, 
                 ephemeral: true 
             });
         }
