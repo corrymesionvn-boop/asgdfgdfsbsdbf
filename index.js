@@ -1,39 +1,51 @@
-const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const axios = require('axios');
 const express = require('express');
 
 const app = express();
-app.get('/', (req, res) => res.send('Bot is Online!'));
+app.get('/', (req, res) => res.send('Bot IDX Live!'));
 app.listen(process.env.PORT || 3000);
 
-// KHỞI TẠO VỚI ĐẦY ĐỦ INTENTS
 const client = new Client({ 
-    intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent // QUAN TRỌNG NHẤT ĐỂ ĐỌC LỆNH !idx
-    ] 
-});
-
-client.on('ready', () => {
-    console.log(`✅ ĐÃ KẾT NỐI: Bot đang chạy với tên ${client.user.tag}`);
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
 });
 
 client.on('messageCreate', async (message) => {
-    // Log mọi tin nhắn để kiểm tra Bot có "thấy" bạn không
-    console.log(`📩 Nhận tin nhắn: ${message.content} từ ${message.author.username}`);
-
     if (message.content === '!idx') {
-        const button = new ButtonBuilder()
-            .setCustomId('trigger_idx')
-            .setLabel('Khởi động/Làm mới IDX')
-            .setStyle(ButtonStyle.Success);
-        
-        const row = new ActionRowBuilder().addComponents(button);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('trigger_idx')
+                .setLabel('Khởi động Treo IDX (8 Phút)')
+                .setStyle(ButtonStyle.Primary)
+        );
+        await message.reply({ content: '💻 **Hệ thống treo máy tự động:**', components: [row] });
+    }
+});
+
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'trigger_idx') {
+        // Thông báo cho cả server biết ai đã nhấn nút
+        await interaction.reply({ 
+            content: `📢 **Thông báo:** Người dùng **${interaction.user.username}** vừa kích hoạt treo IDX!` 
+        });
 
         try {
-            await message.reply({ 
-                content: '🤖 Hệ thống đã nhận lệnh! Nhấn nút bên dưới:', 
+            const hfToken = process.env.HF_TOKEN;
+            const response = await axios.get("https://corrymesion-jduxyds.hf.space/trigger", {
+                params: { token: hfToken, user: interaction.user.username }
+            });
+            
+            // Cập nhật trạng thái sau khi Space phản hồi thành công
+            await interaction.followUp({ content: `✅ Hệ thống Hugging Face xác nhận: **${response.data}**`, ephemeral: true });
+        } catch (error) {
+            await interaction.followUp({ content: `❌ Không thể kết nối Space!`, ephemeral: true });
+        }
+    }
+});
+
+client.login(process.env.DISCORD_TOKEN);
                 components: [row] 
             });
             console.log("✅ Đã gửi nút bấm thành công.");
