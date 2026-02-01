@@ -2,12 +2,10 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 const axios = require('axios');
 const express = require('express');
 
-// Khởi tạo Express để giữ Render không tắt Bot
 const app = express();
-app.get('/', (req, res) => res.send('Bot IDX is Running!'));
+app.get('/', (req, res) => res.send('Bot IDX Live!'));
 app.listen(process.env.PORT || 3000);
 
-// Cấu hình Client với đầy đủ quyền đọc tin nhắn
 const client = new Client({ 
     intents: [
         GatewayIntentBits.Guilds, 
@@ -16,7 +14,9 @@ const client = new Client({
     ] 
 });
 
-// Lệnh tạo nút bấm
+// Link Space của bạn
+const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger"; 
+
 client.on('messageCreate', async (message) => {
     if (message.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
@@ -26,44 +26,48 @@ client.on('messageCreate', async (message) => {
                 .setStyle(ButtonStyle.Success)
         );
         await message.reply({ 
-            content: '💻 **Hệ thống điều khiển treo máy:**\nNhấn nút bên dưới để bắt đầu phiên làm việc 8 phút.', 
+            content: '💻 **Hệ thống điều khiển treo máy:**', 
             components: [row] 
         });
     }
 });
 
-// Xử lý khi nhấn nút
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
     if (interaction.customId === 'trigger_idx') {
-        // 1. Thông báo tên người kích hoạt (Không dùng @everyone)
+        // Thông báo tên người kích hoạt
         await interaction.reply({ 
-            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt một phiên treo máy 8 phút!` 
+            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt treo IDX!` 
         });
 
         try {
-            const hfToken = process.env.HF_TOKEN; // Lấy từ Environment của Render
-            const response = await axios.get("https://corrymesion-jduxyds.hf.space/trigger", {
+            const hfToken = process.env.HF_TOKEN; 
+
+            const response = await axios.get(HF_URL, {
                 params: { 
                     token: hfToken, 
                     user: interaction.user.username 
-                }
+                },
+                // Gửi chìa khóa để vào Space Private
+                headers: {
+                    'Authorization': `Bearer ${hfToken}`
+                },
+                timeout: 10000 
             });
             
-            // 2. Phản hồi riêng xác nhận từ Space
             await interaction.followUp({ 
-                content: `✅ **Hệ thống xác nhận:** ${response.data}`, 
+                content: `✅ **Xác nhận:** ${response.data}`, 
                 ephemeral: true 
             });
         } catch (error) {
+            console.error("Lỗi:", error.message);
             await interaction.followUp({ 
-                content: `❌ Lỗi: Không thể kết nối tới Space. Hãy kiểm tra trạng thái Running!`, 
+                content: `❌ Lỗi kết nối: Space có thể đang khởi động lại hoặc sai Token!`, 
                 ephemeral: true 
             });
         }
     }
 });
 
-// Đăng nhập Bot
 client.login(process.env.DISCORD_TOKEN);
