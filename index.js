@@ -1,38 +1,57 @@
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const express = require('express');
 const axios = require('axios');
-const app = express();
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const HF_TOKEN = process.env.HF_TOKEN; // Lấy từ Environment Variable bạn vừa tạo
+const client = new Client({ 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
+});
+
+// Thay link Space của bạn vào đây
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
+const COOLDOWN_TIME = 8 * 60 * 1000; 
+let lastUsed = 0;
 
-app.get('/', (req, res) => res.send('Bot Controller is Active'));
-app.listen(process.env.PORT || 3000);
-
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
-
-client.on('messageCreate', async (msg) => {
-    if (msg.content === '!idx') {
+client.on('messageCreate', async (message) => {
+    if (message.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('run_idx_vfinal').setLabel('🚀 Kích hoạt Treo IDX').setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId('trigger_idx')
+                .setLabel('Khởi động/Làm mới IDX') // Nhãn nút theo yêu cầu
+                .setButtonStyle(ButtonStyle.Success)
         );
-        await msg.reply({ content: 'Nhấn nút để bắt đầu chu kỳ 8 phút:', components: [row] });
+        await message.reply({ content: 'Hệ thống treo IDX sẵn sàng:', components: [row] });
     }
 });
 
-client.on('interactionCreate', async (i) => {
-    if (!i.isButton()) return;
-    try {
-        await i.deferReply({ ephemeral: true }); // Phản hồi ngay để tránh lỗi 10062
-        await axios.get(`${HF_URL}?user=${i.user.username}`, {
-            timeout: 15000,
-            headers: { 'Authorization': `Bearer ${HF_TOKEN}` }
-        });
-        await i.editReply(`✅ **Thành công!** Tín hiệu đã gửi tới Hugging Face.`);
-    } catch (e) {
-        await i.editReply(`❌ **Lỗi:** Không thể gọi HF. Check biến HF_TOKEN trên Render.`);
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'trigger_idx') {
+        const now = Date.now();
+        
+        // Kiểm tra 8 phút
+        if (now - lastUsed < COOLDOWN_TIME) {
+            const timeLeft = Math.ceil((lastUsed + COOLDOWN_TIME - now) / 1000);
+            return interaction.reply({ 
+                content: `⚠️ Hệ thống đang chạy! Vui lòng đợi thêm **${timeLeft} giây** nữa để làm mới lại.`, 
+                ephemeral: true 
+            });
+        }
+
+        const userName = interaction.user.username;
+        try {
+            await interaction.deferReply();
+            
+            // Gọi API sang HF kèm tên người tương tác
+            await axios.get(`${HF_URL}?user=${encodeURIComponent(userName)}`);
+            
+            lastUsed = now;
+            await interaction.editReply({ 
+                content: `🚀 **${userName}** đã **Khởi động/Làm mới IDX** thành công! Hệ thống sẽ treo trong 8 phút.` 
+            });
+        } catch (error) {
+            await interaction.editReply({ content: '❌ Không thể kết nối tới Space. Vui lòng kiểm tra lại trạng thái Hugging Face!' });
+        }
     }
 });
 
-client.login(DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN);
