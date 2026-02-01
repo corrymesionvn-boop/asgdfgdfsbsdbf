@@ -4,10 +4,9 @@ const axios = require('axios');
 const app = express();
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-// ĐẢM BẢO LINK NÀY CHÍNH XÁC (Không có dấu cách ở cuối)
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
-app.get('/', (req, res) => res.send("Bot is Running"));
+app.get('/', (req, res) => res.send("Bot is Alive"));
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -15,26 +14,29 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 client.on('messageCreate', async (msg) => {
     if (msg.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('go').setLabel('🚀 Khởi động / Làm mới IDX').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('activate_idx').setLabel('🚀 Khởi động / Làm mới IDX').setStyle(ButtonStyle.Success),
         );
-        await msg.reply({ content: 'Nhấn để treo IDX 8 phút:', components: [row] });
+        await msg.reply({ content: 'Hệ thống đã sẵn sàng. Nhấn để treo 8 phút:', components: [row] });
     }
 });
 
-client.on('interactionCreate', async (i) => {
-    if (!i.isButton()) return;
-    await i.deferUpdate(); // Tránh lỗi "Interaction failed" trên Discord
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    // QUAN TRỌNG: Báo cho Discord là bot đang xử lý, đừng hiện lỗi "Lỗi tương tác"
+    await interaction.deferReply({ ephemeral: true });
 
     try {
-        // Gửi tín hiệu kèm Header giả lập trình duyệt
-        await axios.get(`${HF_URL}?user=${i.user.username}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 5000 // Chờ 5 giây
+        const response = await axios.get(`${HF_URL}?user=${interaction.user.username}`, {
+            timeout: 10000 // Chờ tối đa 10 giây
         });
-        await i.followUp({ content: `✅ **Thành công!** Hugging Face đã nhận lệnh từ **${i.user.username}**.`, ephemeral: true });
+
+        if (response.status === 200) {
+            await interaction.editReply(`✅ **Thành công!** Hugging Face đang thực thi lệnh cho **${interaction.user.username}**.`);
+        }
     } catch (e) {
-        console.log("Lỗi gửi tín hiệu:", e.message);
-        await i.followUp({ content: `❌ Lỗi: Render không thể gọi Hugging Face. (Chi tiết: ${e.message})`, ephemeral: true });
+        console.error(e);
+        await interaction.editReply(`❌ **Lỗi:** Không thể kết nối tới Hugging Face Space. Hãy kiểm tra tab Logs bên HF.`);
     }
 });
 
