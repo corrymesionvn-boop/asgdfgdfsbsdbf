@@ -4,22 +4,10 @@ const axios = require('axios');
 const app = express();
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+// ĐẢM BẢO LINK NÀY CHÍNH XÁC (Không có dấu cách ở cuối)
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 
-app.get('/', (req, res) => {
-    res.send(`<body style="background:#1a1a1a;color:white;text-align:center;padding-top:50px;">
-        <h1>🤖 Controller Online</h1>
-        <form action="/web-trigger" method="get">
-            <button style="padding:15px;background:green;color:white;cursor:pointer;">🚀 KÍCH HOẠT IDX</button>
-        </form>
-    </body>`);
-});
-
-app.get('/web-trigger', async (req, res) => {
-    await axios.get(`${HF_URL}?user=Admin_Web`);
-    res.send("✅ OK!");
-});
-
+app.get('/', (req, res) => res.send("Bot is Running"));
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -27,21 +15,26 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 client.on('messageCreate', async (msg) => {
     if (msg.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('btn').setLabel('🚀 Khởi động / Làm mới IDX').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('go').setLabel('🚀 Khởi động / Làm mới IDX').setStyle(ButtonStyle.Primary),
         );
-        await msg.reply({ content: 'Bấm để treo IDX 8 phút:', components: [row] });
+        await msg.reply({ content: 'Nhấn để treo IDX 8 phút:', components: [row] });
     }
 });
 
 client.on('interactionCreate', async (i) => {
     if (!i.isButton()) return;
-    await i.reply(`⏳ Đang báo cho Hugging Face...`);
+    await i.deferUpdate(); // Tránh lỗi "Interaction failed" trên Discord
+
     try {
-        // Gọi sang HF kèm tên người bấm
-        await axios.get(`${HF_URL}?user=${i.user.username}`);
-        await i.editReply(`✅ **Thành công!** Hugging Face đang xử lý. Browser sẽ tự tắt sau 8 phút.`);
+        // Gửi tín hiệu kèm Header giả lập trình duyệt
+        await axios.get(`${HF_URL}?user=${i.user.username}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 5000 // Chờ 5 giây
+        });
+        await i.followUp({ content: `✅ **Thành công!** Hugging Face đã nhận lệnh từ **${i.user.username}**.`, ephemeral: true });
     } catch (e) {
-        await i.editReply(`❌ Lỗi: HF không phản hồi kịp (nhưng lệnh có thể đã gửi).`);
+        console.log("Lỗi gửi tín hiệu:", e.message);
+        await i.followUp({ content: `❌ Lỗi: Render không thể gọi Hugging Face. (Chi tiết: ${e.message})`, ephemeral: true });
     }
 });
 
