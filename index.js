@@ -3,12 +3,10 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 
-// Lấy Token từ biến môi trường bạn đã cài đặt
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const HF_TOKEN = process.env.HF_TOKEN; 
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
+const HF_TOKEN = process.env.HF_TOKEN;
 
-app.get('/', (req, res) => res.send('Bot Controller is Running with HF_TOKEN'));
+app.get('/', (req, res) => res.send('Bot Controller is Active'));
 app.listen(process.env.PORT || 3000);
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -16,33 +14,34 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 client.on('messageCreate', async (msg) => {
     if (msg.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('activate_idx').setLabel('🚀 Kích hoạt IDX (Private)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('run_idx').setLabel('🚀 Kích hoạt IDX').setStyle(ButtonStyle.Success),
         );
-        await msg.reply({ content: 'Hệ thống Private đã sẵn sàng. Nhấn để treo 8 phút:', components: [row] });
+        await msg.reply({ content: 'Nhấn nút để bắt đầu chu kỳ 8 phút:', components: [row] });
     }
 });
 
 client.on('interactionCreate', async (i) => {
     if (!i.isButton()) return;
     
-    await i.deferReply({ ephemeral: true });
+    // PHẢI GỌI NGAY: Tránh lỗi Unknown Interaction (10062)
+    try {
+        await i.deferReply({ ephemeral: true });
+    } catch (e) { return console.error("Không thể defer:", e); }
 
     try {
-        // GỬI KÈM TOKEN ĐỂ VƯỢT QUA LỚP BẢO MẬT PRIVATE
+        // Gọi Hugging Face với Token xác thực
         await axios.get(`${HF_URL}?user=${i.user.username}`, {
-            timeout: 15000,
+            timeout: 10000,
             headers: {
-                'Authorization': `Bearer ${HF_TOKEN}`, // Gửi Token tại đây
+                'Authorization': `Bearer ${HF_TOKEN}`,
                 'User-Agent': 'Mozilla/5.0'
             }
         });
-        
-        await i.editReply(`✅ **Xác thực thành công!** Hugging Face đã nhận lệnh treo IDX.`);
+        await i.editReply(`✅ **Thành công!** Tín hiệu đã gửi tới Hugging Face.`);
     } catch (e) {
-        console.error("Lỗi xác thực HF:", e.message);
-        // Nếu lỗi 401 hoặc 403 là do Token sai hoặc hết hạn
-        await i.editReply(`❌ **Lỗi:** Không thể xác thực với Hugging Face (Check HF_TOKEN).`);
+        console.error("Lỗi kết nối HF:", e.message);
+        await i.editReply(`❌ **Lỗi:** Không thể kết nối tới HF. Hãy kiểm tra Logs bên HF.`);
     }
 });
 
-client.login(DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN);
