@@ -2,14 +2,21 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 const axios = require('axios');
 const express = require('express');
 
+// Khởi tạo Express để giữ Render không tắt Bot
 const app = express();
-app.get('/', (req, res) => res.send('Bot IDX Live!'));
+app.get('/', (req, res) => res.send('Bot IDX is Running!'));
 app.listen(process.env.PORT || 3000);
 
+// Cấu hình Client với đầy đủ quyền đọc tin nhắn
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent 
+    ] 
 });
 
+// Lệnh tạo nút bấm
 client.on('messageCreate', async (message) => {
     if (message.content === '!idx') {
         const row = new ActionRowBuilder().addComponents(
@@ -25,17 +32,18 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// Xử lý khi nhấn nút
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
     if (interaction.customId === 'trigger_idx') {
-        // Thông báo tên người dùng công khai nhưng KHÔNG ping everyone
+        // 1. Thông báo tên người kích hoạt (Không dùng @everyone)
         await interaction.reply({ 
-            content: `✨ Người dùng **${interaction.user.username}** vừa kích hoạt một phiên treo máy 8 phút!` 
+            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt một phiên treo máy 8 phút!` 
         });
 
         try {
-            const hfToken = process.env.HF_TOKEN;
+            const hfToken = process.env.HF_TOKEN; // Lấy từ Environment của Render
             const response = await axios.get("https://corrymesion-jduxyds.hf.space/trigger", {
                 params: { 
                     token: hfToken, 
@@ -43,18 +51,19 @@ client.on('interactionCreate', async (interaction) => {
                 }
             });
             
-            // Gửi phản hồi xác nhận riêng cho người bấm (chỉ họ thấy)
+            // 2. Phản hồi riêng xác nhận từ Space
             await interaction.followUp({ 
-                content: `✅ **Lệnh đã được gửi:** ${response.data}`, 
+                content: `✅ **Hệ thống xác nhận:** ${response.data}`, 
                 ephemeral: true 
             });
         } catch (error) {
             await interaction.followUp({ 
-                content: `❌ Lỗi: Không thể kết nối tới máy chủ Hugging Face.`, 
+                content: `❌ Lỗi: Không thể kết nối tới Space. Hãy kiểm tra trạng thái Running!`, 
                 ephemeral: true 
             });
         }
     }
 });
 
+// Đăng nhập Bot
 client.login(process.env.DISCORD_TOKEN);
