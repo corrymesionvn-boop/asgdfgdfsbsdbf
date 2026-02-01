@@ -22,7 +22,7 @@ client.on('messageCreate', async (message) => {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('trigger_idx')
-                .setLabel('Khởi động Treo IDX (8 Phút)')
+                .setLabel('Khởi động/Treo IDX (8 Phút)')
                 .setStyle(ButtonStyle.Success)
         );
         await message.reply({ 
