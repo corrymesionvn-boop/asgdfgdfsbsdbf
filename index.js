@@ -2,14 +2,22 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 const axios = require('axios');
 const express = require('express');
 
+// --- TẠO SERVER GIỮ PORT CHO RENDER ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot is Live!'));
+app.get('/', (req, res) => res.send('Bot is Running!'));
 app.listen(process.env.PORT || 3000);
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({ 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent
+    ] 
+});
 
+// --- CẤU HÌNH LẤY TỪ BIẾN MÔI TRƯỜNG ---
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
-const HF_TOKEN = process.env.HF_TOKEN; 
+const HF_TOKEN = process.env.HF_TOKEN; // Bot sẽ lấy token hf_qiPo... từ đây
 const COOLDOWN_TIME = 8 * 60 * 1000;
 let lastUsed = 0;
 
@@ -31,36 +39,31 @@ client.on('interactionCreate', async (interaction) => {
         const now = Date.now();
         if (now - lastUsed < COOLDOWN_TIME) {
             const timeLeft = Math.ceil((lastUsed + COOLDOWN_TIME - now) / 1000);
-            return interaction.reply({ content: `⚠️ Vui lòng đợi ${timeLeft}s`, ephemeral: true });
+            return interaction.reply({ content: `⚠️ Đợi ${timeLeft}s`, ephemeral: true });
         }
 
-        try {
-            // FIX: Sử dụng fetchReply để đảm bảo defer thành công
-            await interaction.deferReply().catch(err => console.error("Lỗi defer:", err));
+        // Trả lời ngay lập tức để tránh lỗi Unknown Interaction
+        await interaction.reply({ content: `⏳ Đang gửi lệnh tới Space (User: **${interaction.user.username}**)...`, ephemeral: false });
 
-            await axios.get(`${HF_URL}?user=${encodeURIComponent(interaction.user.username)}`, {
-                headers: { 'Authorization': `Bearer ${HF_TOKEN}` },
-                timeout: 30000 // Chờ tối đa 30s
+        try {
+            // Gửi Token qua URL theo ý bạn muốn để dễ test
+            await axios.get(`${HF_URL}?token=${HF_TOKEN}&user=${encodeURIComponent(interaction.user.username)}`, {
+                timeout: 25000 
             });
 
             lastUsed = now;
+            await interaction.editReply(`✅ **${interaction.user.username}** đã làm mới IDX thành công!`);
 
-            // Kiểm tra nếu interaction vẫn còn hiệu lực trước khi edit
-            if (interaction.deferred || interaction.replied) {
-                await interaction.editReply(`🚀 **${interaction.user.username}** đã làm mới IDX thành công!`);
-            }
+            // Thông báo nhắc nhở sau 8 phút
+            setTimeout(() => {
+                interaction.channel.send("🔔 **Hết 8 phút!** IDX đã hoàn thành chu kỳ, bạn có thể nhấn làm mới tiếp.");
+            }, COOLDOWN_TIME);
+
         } catch (error) {
-            console.error("Lỗi kết nối:", error.message);
-            if (interaction.deferred || interaction.replied) {
-                await interaction.editReply('❌ Kết nối tới Space thất bại. Hãy kiểm tra HF_TOKEN và trạng thái Space!');
-            }
+            console.error("Lỗi:", error.message);
+            await interaction.editReply(`❌ Không thể kết nối tới Space. Lỗi: ${error.message}`);
         }
     }
-});
-
-// Chặn đứng việc crash bot khi có lỗi không mong muốn
-process.on('unhandledRejection', error => {
-    console.error('Unhandled promise rejection:', error);
 });
 
 client.login(process.env.DISCORD_TOKEN);
