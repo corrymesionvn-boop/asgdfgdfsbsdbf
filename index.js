@@ -11,8 +11,7 @@ const client = new Client({
 });
 
 const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger"; 
-
-// Biến lưu thời gian hết hạn Cooldown (ms)
+// Biến global nằm ngoài mọi function để khóa toàn bộ Bot
 let cooldownEnd = 0; 
 
 client.on('messageCreate', async (message) => {
@@ -23,12 +22,7 @@ client.on('messageCreate', async (message) => {
                 .setLabel('Khởi động/Refresh IDX')
                 .setStyle(ButtonStyle.Success)
         );
-
-        const responseContent = 
-            "**Khởi động/Refresh IDX:**\n" +
-            "Bot sẽ chỉ treo Web trong vòng 8 phút, sau 8 phút Bot sẽ tự rời web. " +
-            "Trong thời gian Bot đang làm việc, nút này sẽ tạm khóa.";
-
+        const responseContent = "**Khởi động/Refresh IDX:**\nBot sẽ treo Web trong 8 phút. Nút sẽ khóa trong thời gian này.";
         await message.reply({ content: responseContent, components: [row] });
     }
 });
@@ -39,24 +33,24 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'trigger_idx') {
         const now = Date.now();
 
-        // Kiểm tra xem còn trong thời gian Cooldown không
+        // KIỂM TRA KHÓA: Nếu thời gian hiện tại vẫn nhỏ hơn thời gian kết thúc cooldown
         if (now < cooldownEnd) {
-            const remaining = Math.ceil((cooldownEnd - now) / 60000); // Đổi sang phút
+            const unixTimestamp = Math.floor(cooldownEnd / 1000);
+            // Trả lời ngay lập tức và thoát hàm, không chạy code gọi Space bên dưới
             return await interaction.reply({ 
-                content: `⏳ **Bot đang bận treo máy!** Vui lòng đợi thêm khoảng **${remaining} phút** nữa để có thể Refresh lại.`, 
+                content: `⏳ **Hệ thống đang bận!** Nút bấm đang bị khóa. Bạn có thể thử lại vào: <t:${unixTimestamp}:R>`, 
                 ephemeral: true 
             });
         }
 
-        // Nếu hết Cooldown, bắt đầu tiến trình mới
+        // ĐẶT KHÓA NGAY LẬP TỨC: Trước khi gọi API để tránh spam nhanh
+        cooldownEnd = Date.now() + (8 * 60 * 1000);
+
         await interaction.reply({ 
-            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt treo IDX! Hệ thống sẽ khóa nút trong 8 phút.` 
+            content: `✨ Người dùng **${interaction.user.username}** đã kích hoạt treo IDX! Nút bấm đã bị khóa 8 phút.` 
         });
 
         try {
-            // Thiết lập Cooldown 8 phút (8 * 60 * 1000 ms)
-            cooldownEnd = Date.now() + (8 * 60 * 1000); 
-
             const hfToken = process.env.HF_TOKEN; 
             const response = await axios.get(HF_URL, {
                 params: { token: hfToken, user: interaction.user.username },
@@ -64,17 +58,11 @@ client.on('interactionCreate', async (interaction) => {
                 timeout: 10000 
             });
             
-            await interaction.followUp({ 
-                content: `✅ **Xác nhận:** ${response.data}\n⏱️ Cooldown đã được kích hoạt.`, 
-                ephemeral: true 
-            });
+            await interaction.followUp({ content: `✅ **Xác nhận:** ${response.data}`, ephemeral: true });
         } catch (error) {
-            // Nếu lỗi kết nối, reset cooldown để người dùng có thể thử lại ngay
+            // Nếu lỗi kết nối, mở khóa lại ngay để người dùng có thể thử lại
             cooldownEnd = 0; 
-            await interaction.followUp({ 
-                content: `❌ Lỗi kết nối Space! Nút đã được mở lại để bạn thử lại.`, 
-                ephemeral: true 
-            });
+            await interaction.followUp({ content: `❌ Lỗi kết nối! Nút đã được mở khóa lại.`, ephemeral: true });
         }
     }
 });
