@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 const axios = require('axios');
 const express = require('express');
 
+// Khởi tạo server để Render không bị tắt bot
 const app = express();
 app.get('/', (req, res) => res.send('Bot IDX Live!'));
 app.listen(process.env.PORT || 3000);
@@ -17,11 +18,16 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     if (message.content === '!idx') {
+        // TÍNH NĂNG: Xóa tin nhắn cũ của bot để bảng điều khiển luôn ở dưới cùng
         try {
-            const fetchedMessages = await message.channel.messages.fetch({ limit: 10 });
+            const fetchedMessages = await message.channel.messages.fetch({ limit: 15 });
             const botMessages = fetchedMessages.filter(m => m.author.id === client.user.id);
-            if (botMessages.size > 0) await message.channel.bulkDelete(botMessages).catch(() => {});
-        } catch (err) { console.log("Không thể dọn dẹp tin nhắn cũ."); }
+            if (botMessages.size > 0) {
+                await message.channel.bulkDelete(botMessages).catch(() => {});
+            }
+        } catch (err) {
+            console.log("Không thể dọn dẹp tin nhắn cũ.");
+        }
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -29,6 +35,7 @@ client.on('messageCreate', async (message) => {
                 .setLabel('Khởi động/Refresh IDX')
                 .setStyle(ButtonStyle.Success)
         );
+
         const responseContent = "🚀 **BẢNG ĐIỀU KHIỂN TREO IDX**\nNhấn nút bên dưới để bắt đầu phiên treo máy 8 phút.";
         await message.channel.send({ content: responseContent, components: [row] });
     }
@@ -40,6 +47,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId === 'trigger_idx') {
         const now = Date.now();
 
+        // Kiểm tra Cooldown
         if (now < cooldownEnd) {
             const unixTimestamp = Math.floor(cooldownEnd / 1000);
             return await interaction.reply({ 
@@ -48,43 +56,46 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
 
-        // Báo cho Discord bot đang xử lý để tránh lỗi 3 giây
+        // BƯỚC QUAN TRỌNG: deferReply để tránh lỗi "Unknown Interaction" (Fix lỗi 3s)
         await interaction.deferReply(); 
 
         try {
-            const hfToken = process.env.HF_TOKEN; // Lấy từ Environment Variable trên Render
+            // Lấy token từ biến môi trường Render đã cài đặt
+            const hfToken = process.env.HF_TOKEN; 
             
-            // THỰC HIỆN PING: Tự động ghép token và user vào URL
+            // Thực hiện ping tới Hugging Face với Token và User
             const response = await axios.get(HF_URL, {
                 params: { 
                     token: hfToken, 
                     user: interaction.user.username 
                 },
-                timeout: 30000 // Tăng lên 30s để thoải mái chờ Space khởi động
+                timeout: 30000 // Chờ tối đa 30s
             });
             
+            // Nếu thành công (nhận được chữ SUCCESS)
             if (response.data.toString().includes("SUCCESS")) {
-                cooldownEnd = Date.now() + (8 * 60 * 1000);
+                cooldownEnd = Date.now() + (8 * 60 * 1000); // Khóa nút 8 phút
                 await interaction.editReply({ content: `✅ **Xác nhận từ Space:** ${response.data}` });
             } else {
+                // Nếu nhận được nội dung lỗi (ví dụ lỗi "Oops")
                 throw new Error(response.data);
             }
 
         } catch (error) {
-            // Mở lại nút nếu có lỗi để người dùng thử lại
+            // Nếu lỗi, mở lại nút ngay để người dùng có thể thử lại
             cooldownEnd = 0; 
 
-            let displayError = "";
+            let detailError = "";
             if (error.response) {
-                // Nếu Hugging Face trả về trang HTML 404/500, chỉ lấy tiêu đề lỗi để tránh quá 2000 ký tự
-                displayError = `Hugging Face báo lỗi HTTP ${error.response.status}`;
+                // Fix lỗi 2000 ký tự: Chỉ lấy mã lỗi HTTP nếu HF trả về trang HTML dài
+                detailError = `Hugging Face báo lỗi HTTP ${error.response.status}`;
             } else {
-                displayError = error.message;
+                detailError = error.message;
             }
 
-            // Hiển thị thông báo đúng yêu cầu của bạn
+            // Thông báo lỗi đúng yêu cầu của bạn
             await interaction.editReply({ 
-                content: `⚠️ **Hiện tại không thể truy cập được IDX, hãy báo cáo với chủ Server để được giải quyết.**\n*(Chi tiết: ${displayError})*` 
+                content: `⚠️ **Hiện tại không thể truy cập được IDX, hãy báo cáo với chủ Server để được giải quyết.**\n*(Chi tiết: ${detailError})*` 
             });
         }
     }
