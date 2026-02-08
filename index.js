@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 const axios = require('axios');
 const express = require('express');
 
-// Khởi tạo server để Render giữ bot luôn sống
 const app = express();
 app.get('/', (req, res) => res.send('Bot IDX Live!'));
 app.listen(process.env.PORT || 3000);
@@ -15,20 +14,15 @@ const HF_URL = "https://corrymesion-jduxyds.hf.space/trigger";
 let cooldownEnd = 0; 
 
 client.on('messageCreate', async (message) => {
-    // Không phản hồi bot
     if (message.author.bot) return;
 
     if (message.content === '!idx') {
-        // TÍNH NĂNG: Xóa các tin nhắn cũ của bot trong channel để bảng điều khiển luôn ở dưới cùng
+        // TÍNH NĂNG: Xóa các tin nhắn cũ của bot để bảng điều khiển luôn ở dưới cùng
         try {
-            const fetchedMessages = await message.channel.messages.fetch({ limit: 20 });
+            const fetchedMessages = await message.channel.messages.fetch({ limit: 10 });
             const botMessages = fetchedMessages.filter(m => m.author.id === client.user.id);
-            if (botMessages.size > 0) {
-                await message.channel.bulkDelete(botMessages).catch(err => console.log("Lỗi xóa tin nhắn: " + err));
-            }
-        } catch (err) {
-            console.log("Không thể dọn dẹp tin nhắn cũ.");
-        }
+            if (botMessages.size > 0) await message.channel.bulkDelete(botMessages);
+        } catch (err) { console.log("Không thể xóa tin nhắn cũ."); }
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -36,9 +30,8 @@ client.on('messageCreate', async (message) => {
                 .setLabel('Khởi động/Refresh IDX')
                 .setStyle(ButtonStyle.Success)
         );
-        
-        const responseContent = "🚀 **BẢNG ĐIỀU KHIỂN TREO IDX**\nNhấn nút bên dưới để bắt đầu phiên treo máy 8 phút.";
-        await message.channel.send({ content: responseContent, components: [row] });
+        const responseContent = "**🚀 BẢNG ĐIỀU KHIỂN TREO IDX:**\nBot sẽ treo Web trong 8 phút. Nhấn nút bên dưới để bắt đầu.";
+        await message.reply({ content: responseContent, components: [row] });
     }
 });
 
@@ -66,39 +59,36 @@ client.on('interactionCreate', async (interaction) => {
 
         try {
             const hfToken = process.env.HF_TOKEN; 
+            
+            // GIỮ NGUYÊN PHƯƠNG THỨC PING VỚI TOKEN
             const response = await axios.get(HF_URL, {
-                params: { token: hfToken, user: interaction.user.username },
-                timeout: 20000 // Đợi phản hồi trong 20s
+                params: { 
+                    token: hfToken, 
+                    user: interaction.user.username 
+                },
+                timeout: 15000 
             });
             
-            // Nếu phản hồi từ Hugging Face có chứa chữ "SUCCESS"
-            if (response.data.includes("SUCCESS")) {
-                await interaction.followUp({ content: `✅ **Xác nhận từ Space:** ${response.data}`, ephemeral: true });
+            // Nếu Space trả về chuỗi có chữ SUCCESS
+            if (response.data.toString().includes("SUCCESS")) {
+                await interaction.followUp({ content: `✅ **Xác nhận:** ${response.data}`, ephemeral: true });
             } else {
-                // Nếu không có SUCCESS, coi như là lỗi nội dung và đẩy xuống catch
+                // Nếu trả về lỗi khác (như chữ Oops từ dò tìm)
                 throw new Error(response.data);
             }
 
         } catch (error) {
-            // MỞ KHÓA LẠI NÚT NẾU LỖI ĐỂ NGƯỜI KHÁC CÓ THỂ THỬ LẠI
+            // Mở khóa lại nút nếu lỗi để có thể thử lại ngay
             cooldownEnd = 0; 
 
-            // Lấy thông báo lỗi chi tiết từ Hugging Face
-            let detailError = "";
+            let errorMessage = error.message;
             if (error.response) {
-                // Lỗi từ server (401, 500, 504...)
-                detailError = `Hugging Face báo lỗi HTTP ${error.response.status}: ${error.response.data}`;
-            } else if (error.request) {
-                // Lỗi không phản hồi
-                detailError = "Hugging Face Space không phản hồi (Timeout).";
-            } else {
-                // Lỗi code hoặc lỗi khác
-                detailError = error.message;
+                errorMessage = `Hugging Face lỗi (HTTP ${error.response.status}): ${error.response.data}`;
             }
 
-            // Gửi thông báo lỗi theo yêu cầu của bạn
+            // Câu báo lỗi đúng theo yêu cầu của bạn
             await interaction.followUp({ 
-                content: `⚠️ **Hiện tại không thể truy cập được IDX, hãy báo cáo với chủ Server để được giải quyết.**\n*(Chi tiết: ${detailError})*`, 
+                content: `⚠️ **Hiện tại không thể truy cập được IDX, hãy báo cáo với chủ Server để được giải quyết.**\n(Lỗi: ${errorMessage})`, 
                 ephemeral: false 
             });
         }
